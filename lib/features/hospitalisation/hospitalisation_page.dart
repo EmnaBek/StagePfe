@@ -1417,6 +1417,7 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
       return;
     }
 
+
     List<_HospitalisationReferentielItem> filteredItems =
         _referentielItemsForType(type);
 
@@ -1472,6 +1473,7 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
                       : Column(
                           children: [
                             TextField(
+
                               autofocus: true,
                               onChanged: filterItems,
                               decoration: const InputDecoration(
@@ -1530,7 +1532,7 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
           );
         },
       ),
-    );
+    ).whenComplete(searchCtrl.dispose);
   }
 }
 
@@ -1559,6 +1561,7 @@ class _HospitalisationReferentielItem {
       isChud: _asBool(json['is_chud']),
     );
   }
+
 
   final String code;
   final String label;
