@@ -1,7 +1,11 @@
-import 'package:flutter/material.dart';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
 import '../../core/services/taka_usb_service.dart';
+import '../../core/session/user_session.dart';
 
 // ─── Couleurs principales ────────────────────────────────────────────────────
 const kGreen = Color(0xFF4CAF8C);
@@ -37,8 +41,23 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
   List<String> imageries = [];
   List<String> affections = [];
 
+  static final Uri _syncUri =
+      Uri.parse('https://archtpa.bridges-corp.cloud/api/sync-mobile');
+  bool _isReferentielLoading = true;
+  String? _referentielError;
+  List<_HospitalisationReferentielItem> _productsReferentiel =
+      <_HospitalisationReferentielItem>[];
+  List<_HospitalisationReferentielItem> _cim10Referentiel =
+      <_HospitalisationReferentielItem>[];
+
   // ── Statut workflow ───────────────────────────────────────────────────────
   int statusStep = 0; // 0=Brouillon, 1=Pré-validée, 2=Validée
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReferentiel();
+  }
 
   @override
   void dispose() {
@@ -47,6 +66,113 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
     adresseCtrl.dispose();
     telephoneCtrl.dispose();
     super.dispose();
+  }
+
+  Future<List<_HospitalisationReferentielItem>> _fetchReferentielItems(
+    String token,
+    String model,
+  ) async {
+    final http.Response response = await http.post(
+      _syncUri,
+      headers: <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode(<String, dynamic>{
+        'token': token,
+        'model': model,
+        'lastSync': '1970-01-01 00:00:00',
+        'serial': '999',
+      }),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+
+    final dynamic decoded = jsonDecode(response.body);
+    final List<dynamic> rawResults = decoded is Map<String, dynamic>
+        ? (decoded['results'] as List<dynamic>? ?? <dynamic>[])
+        : <dynamic>[];
+
+    return rawResults
+        .whereType<Map<String, dynamic>>()
+        .map(_HospitalisationReferentielItem.fromJson)
+        .where((_HospitalisationReferentielItem item) => item.isActive)
+        .toList()
+      ..sort(
+        (_HospitalisationReferentielItem a,
+                _HospitalisationReferentielItem b) =>
+            a.displayLabel.toLowerCase().compareTo(
+                  b.displayLabel.toLowerCase(),
+                ),
+      );
+  }
+
+  Future<void> _loadReferentiel() async {
+    final String? token = UserSession.authToken.value;
+    final String? structureType = UserSession.structureType.value;
+
+    if (token == null || token.trim().isEmpty) {
+      setState(() {
+        _isReferentielLoading = false;
+        _referentielError =
+            'Aucun token disponible. Veuillez scanner le QR code avant de charger le referentiel.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isReferentielLoading = true;
+      _referentielError = null;
+    });
+
+    try {
+      final List<_HospitalisationReferentielItem> products =
+          await _fetchReferentielItems(token, 'Product');
+      final List<_HospitalisationReferentielItem> cim10 =
+          await _fetchReferentielItems(token, 'Cim_10');
+
+      if (!mounted) return;
+      setState(() {
+        _productsReferentiel = products
+            .where((_HospitalisationReferentielItem item) =>
+                item.matchesStructure(structureType))
+            .toList();
+        _cim10Referentiel = cim10;
+        _isReferentielLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isReferentielLoading = false;
+        _referentielError = 'Chargement du referentiel impossible: $error';
+      });
+    }
+  }
+
+  List<_HospitalisationReferentielItem> _referentielItemsForType(String type) {
+    if (type == 'affection') {
+      return _cim10Referentiel;
+    }
+
+    final String? category = switch (type) {
+      'medicament' => 'PHARMACIE',
+      'labo' => 'LABO',
+      'radio' => 'RADIO',
+      'acte' => 'ACTE',
+      _ => null,
+    };
+
+    if (category == null) {
+      return <_HospitalisationReferentielItem>[];
+    }
+
+    return _productsReferentiel
+        .where(
+          (_HospitalisationReferentielItem item) => item.category == category,
+        )
+        .toList();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1236,54 +1362,284 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
     );
   }
 
-  // ── Ajout d'items (dialog simple) ─────────────────────────────────────────
+  // ── Ajout d'items depuis le référentiel ─────────────────────────────────
+  String _itemTypeLabel(String type) {
+    switch (type) {
+      case 'affection':
+        return 'une affection CIM 10';
+      case 'acte':
+        return 'un acte';
+      case 'medicament':
+        return 'un médicament';
+      case 'labo':
+        return 'une analyse';
+      case 'radio':
+        return 'une imagerie';
+      default:
+        return type;
+    }
+  }
+
+  void _addSelectedReferentielItem(String type, String value) {
+    if (value.trim().isEmpty) return;
+
+    setState(() {
+      switch (type) {
+        case 'affection':
+          if (!affections.contains(value)) affections.add(value);
+          break;
+        case 'acte':
+          if (!actes
+              .any((Map<String, dynamic> acte) => acte['label'] == value)) {
+            actes.add(<String, dynamic>{'label': value});
+          }
+          break;
+        case 'medicament':
+          if (!medicaments.contains(value)) medicaments.add(value);
+          break;
+        case 'labo':
+          if (!analyses.contains(value)) analyses.add(value);
+          break;
+        case 'radio':
+          if (!imageries.contains(value)) imageries.add(value);
+          break;
+      }
+    });
+  }
+
   void _addItem(String type) {
-    final ctrl = TextEditingController();
+    if (_isReferentielLoading) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chargement du référentiel en cours...'),
+        ),
+      );
+      return;
+    }
+
+    final TextEditingController searchCtrl = TextEditingController();
+    List<_HospitalisationReferentielItem> filteredItems =
+        _referentielItemsForType(type);
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Ajouter $type'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Nom...'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final v = ctrl.text.trim();
-              if (v.isNotEmpty) {
-                setState(() {
-                  switch (type) {
-                    case 'affection':
-                      affections.add(v);
-                      break;
-                    case 'acte':
-                      actes.add({'label': v});
-                      break;
-                    case 'medicament':
-                      medicaments.add(v);
-                      break;
-                    case 'labo':
-                      analyses.add(v);
-                      break;
-                    case 'radio':
-                      imageries.add(v);
-                      break;
-                  }
-                });
-              }
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: kGreen),
-            child: const Text('Ajouter'),
-          ),
-        ],
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) {
+          void filterItems(String value) {
+            final String query = value.trim().toLowerCase();
+            final List<_HospitalisationReferentielItem> sourceItems =
+                _referentielItemsForType(type);
+            setDialogState(() {
+              filteredItems = query.isEmpty
+                  ? sourceItems
+                  : sourceItems
+                      .where((_HospitalisationReferentielItem item) =>
+                          item.displayLabel.toLowerCase().contains(query) ||
+                          item.code.toLowerCase().contains(query))
+                      .toList();
+            });
+          }
+
+          return AlertDialog(
+            title: Text('Choisir ${_itemTypeLabel(type)}'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 420,
+              child: _isReferentielLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _referentielError != null
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _referentielError!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                            const SizedBox(height: 12),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(dialogContext);
+                                _loadReferentiel();
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Recharger'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kGreen,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            TextField(
+                              controller: searchCtrl,
+                              autofocus: true,
+                              onChanged: filterItems,
+                              decoration: const InputDecoration(
+                                prefixIcon: Icon(Icons.search),
+                                hintText: 'Rechercher dans le référentiel...',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: filteredItems.isEmpty
+                                  ? Center(
+                                      child: Text(
+                                        'Aucun élément trouvé pour ${_itemTypeLabel(type)}.',
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    )
+                                  : ListView.separated(
+                                      itemCount: filteredItems.length,
+                                      separatorBuilder: (_, __) =>
+                                          const Divider(height: 1),
+                                      itemBuilder: (_, int index) {
+                                        final _HospitalisationReferentielItem
+                                            item = filteredItems[index];
+                                        final String value = item.displayValue;
+                                        return ListTile(
+                                          dense: true,
+                                          title: Text(item.displayLabel),
+                                          subtitle: item.code.isEmpty
+                                              ? null
+                                              : Text(item.code),
+                                          trailing: const Icon(
+                                            Icons.add_circle_outline,
+                                            color: kGreen,
+                                          ),
+                                          onTap: () {
+                                            _addSelectedReferentielItem(
+                                              type,
+                                              value,
+                                            );
+                                            Navigator.pop(dialogContext);
+                                          },
+                                        );
+                                      },
+                                    ),
+                            ),
+                          ],
+                        ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Annuler'),
+              ),
+            ],
+          );
+        },
       ),
+    ).whenComplete(searchCtrl.dispose);
+  }
+}
+
+class _HospitalisationReferentielItem {
+  _HospitalisationReferentielItem({
+    required this.code,
+    required this.label,
+    required this.category,
+    required this.isActive,
+    required this.isCs,
+    required this.isHz,
+    required this.isChd,
+    required this.isChud,
+  });
+
+  factory _HospitalisationReferentielItem.fromJson(Map<String, dynamic> json) {
+    final String discipline = _extractDiscipline(json);
+    return _HospitalisationReferentielItem(
+      code: (json['code'] ?? '').toString().trim(),
+      label: (json['name'] ?? json['nom_affiche'] ?? '').toString().trim(),
+      category: _mapCategory(discipline),
+      isActive: _asBool(json['is_active']),
+      isCs: _asBool(json['is_cs']),
+      isHz: _asBool(json['is_hz']),
+      isChd: _asBool(json['is_chd']),
+      isChud: _asBool(json['is_chud']),
     );
+  }
+
+  final String code;
+  final String label;
+  final String category;
+  final bool isActive;
+  final bool isCs;
+  final bool isHz;
+  final bool isChd;
+  final bool isChud;
+
+  String get displayLabel => label.isEmpty ? code : label;
+
+  String get displayValue =>
+      code.isEmpty ? displayLabel : '$code - $displayLabel';
+
+  bool matchesStructure(String? structureType) {
+    switch ((structureType ?? '').trim().toLowerCase()) {
+      case 'cs':
+        return isCs;
+      case 'hz':
+        return isHz;
+      case 'chd':
+        return isChd;
+      case 'chud':
+        return isChud;
+      default:
+        return true;
+    }
+  }
+
+  static String _extractDiscipline(Map<String, dynamic> json) {
+    const List<String> keys = <String>[
+      'discipline',
+      'category',
+      'categorie',
+      'type',
+      'discipline_name',
+      'disciplineLabel',
+    ];
+
+    for (final String key in keys) {
+      final dynamic value = json[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+
+    return '';
+  }
+
+  static String _mapCategory(String discipline) {
+    final String normalized = discipline.trim().toUpperCase();
+    if (normalized.contains('ACTE')) {
+      return 'ACTE';
+    }
+    if (normalized.contains('RADIO')) {
+      return 'RADIO';
+    }
+    if (normalized.contains('CIM')) {
+      return 'CIM 10';
+    }
+    if (normalized.contains('PHARMACIE') || normalized.contains('PHARMACY')) {
+      return 'PHARMACIE';
+    }
+    if (normalized.contains('LABO') ||
+        normalized.contains('LABORATOIRE') ||
+        normalized.contains('LABORATORY')) {
+      return 'LABO';
+    }
+    return 'Tout';
+  }
+
+  static bool _asBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final String normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1' || normalized == 'yes';
+    }
+    return false;
   }
 }
