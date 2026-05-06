@@ -1417,7 +1417,7 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
       return;
     }
 
-    final TextEditingController searchCtrl = TextEditingController();
+
     List<_HospitalisationReferentielItem> filteredItems =
         _referentielItemsForType(type);
 
@@ -1473,7 +1473,7 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
                       : Column(
                           children: [
                             TextField(
-                              controller: searchCtrl,
+
                               autofocus: true,
                               onChanged: filterItems,
                               decoration: const InputDecoration(
@@ -1561,6 +1561,7 @@ class _HospitalisationReferentielItem {
       isChud: _asBool(json['is_chud']),
     );
   }
+
 
   final String code;
   final String label;
