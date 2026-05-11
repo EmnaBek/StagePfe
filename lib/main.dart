@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'app/routes.dart';
 
 void main() {
@@ -13,7 +14,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       routes: AppRoutes.routes,
-      initialRoute: AppRoutes.dashboard,
+      initialRoute: AppRoutes.qrTokenValidation,
     );
   }
 }

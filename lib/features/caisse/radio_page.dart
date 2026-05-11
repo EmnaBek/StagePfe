@@ -9,6 +9,7 @@ class RadioPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return const CardReadingPage(
       title: 'Radio',
+      referentielCategory: 'RADIO',
       description:
           'La page Radio est floutée pour ressembler à une carte. Appuyez sur le bouton ci-dessous pour lire la carte.',
     );

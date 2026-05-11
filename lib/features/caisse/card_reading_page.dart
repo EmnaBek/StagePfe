@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../core/services/referentiel_service.dart';
 import '../../core/services/taka_usb_service.dart';
 
 class CardReadingPage extends StatefulWidget {
@@ -13,12 +14,14 @@ class CardReadingPage extends StatefulWidget {
     required this.description,
     this.backgroundColor = const Color(0xFFF1F8E9),
     this.accentColor = const Color(0xFF155724),
+    this.referentielCategory,
   });
 
   final String title;
   final String description;
   final Color backgroundColor;
   final Color accentColor;
+  final String? referentielCategory;
 
   @override
   State<CardReadingPage> createState() => _CardReadingPageState();
@@ -28,7 +31,43 @@ class _CardReadingPageState extends State<CardReadingPage> {
   final TakaUsbService _takaUsb = TakaUsbService();
   String _cardStatus = 'Appuyez sur READ CARD pour lire la carte';
   bool _isCardLoading = false;
+  bool _isReferentielLoading = false;
+  String? _referentielError;
   Map<String, dynamic>? _cardData;
+  List<ReferentielEntry> _referentielItems = <ReferentielEntry>[];
+  final List<String> _selectedReferentielItems = <String>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReferentiel();
+  }
+
+  Future<void> _loadReferentiel() async {
+    final String? category = widget.referentielCategory;
+    if (category == null) return;
+
+    setState(() {
+      _isReferentielLoading = true;
+      _referentielError = null;
+    });
+
+    try {
+      final List<ReferentielEntry> items =
+          await ReferentielService.fetchProductsByCategory(category);
+      if (!mounted) return;
+      setState(() {
+        _referentielItems = items;
+        _isReferentielLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isReferentielLoading = false;
+        _referentielError = 'Chargement du référentiel impossible: $error';
+      });
+    }
+  }
 
   Future<void> _readCard() async {
     setState(() {
@@ -524,6 +563,8 @@ class _CardReadingPageState extends State<CardReadingPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
+                _buildReferentielPanel(),
+                const SizedBox(height: 16),
                 const Text(
                   'INFORMATIONS',
                   style: TextStyle(
@@ -591,6 +632,166 @@ class _CardReadingPageState extends State<CardReadingPage> {
         ],
       ),
     );
+  }
+
+
+  Widget _buildReferentielPanel() {
+    if (widget.referentielCategory == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: widget.accentColor.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Référentiel ${widget.title}',
+                  style: TextStyle(
+                    color: widget.accentColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _isReferentielLoading ? null : _showReferentielPicker,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Ajouter'),
+              ),
+            ],
+          ),
+          if (_isReferentielLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: LinearProgressIndicator(),
+            )
+          else if (_referentielError != null) ...[
+            Text(
+              _referentielError!,
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+            TextButton.icon(
+              onPressed: _loadReferentiel,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Réessayer'),
+            ),
+          ] else if (_selectedReferentielItems.isEmpty)
+            const Text('Aucun élément sélectionné.')
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _selectedReferentielItems
+                  .map(
+                    (String item) => Chip(
+                      label: Text(item),
+                      onDeleted: () => setState(
+                        () => _selectedReferentielItems.remove(item),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showReferentielPicker() {
+    final TextEditingController searchCtrl = TextEditingController();
+    List<ReferentielEntry> filteredItems = _referentielItems;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) {
+          void filterItems(String value) {
+            final String query = value.trim().toLowerCase();
+            setDialogState(() {
+              filteredItems = query.isEmpty
+                  ? _referentielItems
+                  : _referentielItems
+                      .where((ReferentielEntry item) =>
+                          item.displayLabel.toLowerCase().contains(query) ||
+                          item.code.toLowerCase().contains(query))
+                      .toList();
+            });
+          }
+
+          return AlertDialog(
+            title: Text('Choisir ${widget.title.toLowerCase()}'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 420,
+              child: Column(
+                children: [
+                  TextField(
+                    controller: searchCtrl,
+                    autofocus: true,
+                    onChanged: filterItems,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Rechercher dans le référentiel...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: filteredItems.isEmpty
+                        ? const Center(child: Text('Aucun élément trouvé.'))
+                        : ListView.separated(
+                            itemCount: filteredItems.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (_, int index) {
+                              final ReferentielEntry item = filteredItems[index];
+                              return ListTile(
+                                dense: true,
+                                title: Text(item.displayLabel),
+                                subtitle:
+                                    item.code.isEmpty ? null : Text(item.code),
+                                trailing: Icon(
+                                  _selectedReferentielItems
+                                          .contains(item.displayValue)
+                                      ? Icons.check_circle
+                                      : Icons.add_circle_outline,
+                                  color: widget.accentColor,
+                                ),
+                                onTap: () {
+                                  setState(() {
+                                    if (!_selectedReferentielItems
+                                        .contains(item.displayValue)) {
+                                      _selectedReferentielItems
+                                          .add(item.displayValue);
+                                    }
+                                  });
+                                  Navigator.pop(dialogContext);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Annuler'),
+              ),
+            ],
+          );
+        },
+      ),
+    ).whenComplete(searchCtrl.dispose);
   }
 
   Widget _buildInfoRow(String label, String value) {
