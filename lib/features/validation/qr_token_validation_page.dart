@@ -93,10 +93,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
 
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.dashboard,
-      (Route<dynamic> route) => false,
-    );
+
   }
 
   String _extractToken(String value) {
