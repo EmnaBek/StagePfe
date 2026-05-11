@@ -9,6 +9,7 @@ class PharmaciePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return const CardReadingPage(
       title: 'Pharmacie',
+      referentielCategory: 'PHARMACIE',
       description:
           'La page Pharmacie est floutée pour ressembler à une carte. Appuyez sur le bouton ci-dessous pour lire la carte.',
     );
