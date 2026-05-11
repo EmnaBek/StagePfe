@@ -59,6 +59,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
     final Map<String, dynamic>? decodedClaims =
         _tryDecodeJwtPayload(extractedToken);
 
+
     await _scannerController.stop();
     if (!mounted) return;
 
@@ -86,6 +87,16 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
     );
 
     await _callProtectedApi(extractedToken);
+  }
+
+  Future<void> _openDashboard() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
+
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.dashboard,
+      (Route<dynamic> route) => false,
+    );
   }
 
   String _extractToken(String value) {
@@ -165,6 +176,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
     const List<String> preferredKeys = <String>[
       'displayName',
       'display_name',
+      'displayname',
       'name',
       'fullName',
       'full_name',
@@ -252,10 +264,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
   Future<void> _callProtectedApi(String token) async {
     final String endpoint = _endpointController.text.trim();
     if (endpoint.isEmpty) {
-      setState(() {
-        _isLoading = false;
-        _error = "Ajoute l'URL API avant de scanner.";
-      });
+      await _openDashboard();
       return;
     }
 
@@ -290,15 +299,9 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
             'HTTP ${response.statusCode}\n\nHeaders: ${response.headers}\n\n$prettyBody';
       });
 
-      // Si réponse réussie (2xx), naviguer vers le dashboard après un délai
+      // Si réponse réussie (2xx), naviguer vers le dashboard.
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        await Future.delayed(const Duration(seconds: 1));
-        if (mounted) {
-          Navigator.of(context).pushNamedAndRemoveUntil(
-            AppRoutes.dashboard,
-            (Route<dynamic> route) => false,
-          );
-        }
+
       }
     } catch (e) {
       if (!mounted) return;
@@ -405,8 +408,8 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
               controller: _endpointController,
               keyboardType: TextInputType.url,
               decoration: const InputDecoration(
-                labelText: 'Endpoint API protégé',
-                hintText: 'https://api.exemple.com/patient/profile',
+                labelText: 'Endpoint API protégé (optionnel)',
+                hintText: 'Laisser vide pour continuer après lecture du token',
                 border: OutlineInputBorder(),
               ),
             ),

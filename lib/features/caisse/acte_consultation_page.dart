@@ -1,6 +1,9 @@
-import 'package:flutter/material.dart';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+
+import '../../core/services/referentiel_service.dart';
 import '../../core/services/taka_usb_service.dart';
 
 class ActeConsultationPage extends StatefulWidget {
@@ -14,7 +17,44 @@ class _ActeConsultationPageState extends State<ActeConsultationPage> {
   final takaUsb = TakaUsbService();
   String status = "Press READ";
   bool isLoading = false;
+  bool _isReferentielLoading = true;
+  String? _referentielError;
   Map<String, dynamic>? cardData;
+  List<ReferentielEntry> _cim10Referentiel = <ReferentielEntry>[];
+  List<ReferentielEntry> _actesReferentiel = <ReferentielEntry>[];
+  final List<String> _selectedAffections = <String>[];
+  final List<String> _selectedActes = <String>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReferentiel();
+  }
+
+  Future<void> _loadReferentiel() async {
+    setState(() {
+      _isReferentielLoading = true;
+      _referentielError = null;
+    });
+
+    try {
+      final List<ReferentielEntry> cim10 = await ReferentielService.fetchCim10();
+      final List<ReferentielEntry> actes =
+          await ReferentielService.fetchProductsByCategory('ACTE');
+      if (!mounted) return;
+      setState(() {
+        _cim10Referentiel = cim10;
+        _actesReferentiel = actes;
+        _isReferentielLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isReferentielLoading = false;
+        _referentielError = 'Chargement du référentiel impossible: $error';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +101,10 @@ class _ActeConsultationPageState extends State<ActeConsultationPage> {
                     ],
                   ),
                 ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _buildReferentielPanel(),
+              ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: isLoading ? null : _readCard,
@@ -220,6 +264,208 @@ class _ActeConsultationPageState extends State<ActeConsultationPage> {
         ],
       ),
     );
+  }
+
+
+  Widget _buildReferentielPanel() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.teal.shade200),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Référentiel acte et consultation',
+                  style: TextStyle(
+                    color: Colors.teal,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _isReferentielLoading ? null : _loadReferentiel,
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Recharger',
+              ),
+            ],
+          ),
+          if (_isReferentielLoading)
+            const LinearProgressIndicator()
+          else if (_referentielError != null) ...[
+            Text(
+              _referentielError!,
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+            TextButton.icon(
+              onPressed: _loadReferentiel,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Réessayer'),
+            ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => _showReferentielPicker(
+                    title: 'Choisir une affection CIM 10',
+                    items: _cim10Referentiel,
+                    selectedItems: _selectedAffections,
+                  ),
+                  icon: const Icon(Icons.medical_information),
+                  label: const Text('Ajouter CIM 10'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => _showReferentielPicker(
+                    title: 'Choisir un acte',
+                    items: _actesReferentiel,
+                    selectedItems: _selectedActes,
+                  ),
+                  icon: const Icon(Icons.add_task),
+                  label: const Text('Ajouter acte'),
+                ),
+              ],
+            ),
+            _buildSelectedItems('Affections CIM 10', _selectedAffections),
+            _buildSelectedItems('Actes', _selectedActes),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedItems(String title, List<String> values) {
+    if (values.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Text('$title: aucun élément sélectionné.'),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: values
+                .map(
+                  (String value) => Chip(
+                    label: Text(value),
+                    onDeleted: () => setState(() => values.remove(value)),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReferentielPicker({
+    required String title,
+    required List<ReferentielEntry> items,
+    required List<String> selectedItems,
+  }) {
+    final TextEditingController searchCtrl = TextEditingController();
+    List<ReferentielEntry> filteredItems = items;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) {
+          void filterItems(String value) {
+            final String query = value.trim().toLowerCase();
+            setDialogState(() {
+              filteredItems = query.isEmpty
+                  ? items
+                  : items
+                      .where((ReferentielEntry item) =>
+                          item.displayLabel.toLowerCase().contains(query) ||
+                          item.code.toLowerCase().contains(query))
+                      .toList();
+            });
+          }
+
+          return AlertDialog(
+            title: Text(title),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 420,
+              child: Column(
+                children: [
+                  TextField(
+                    controller: searchCtrl,
+                    autofocus: true,
+                    onChanged: filterItems,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Rechercher dans le référentiel...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: filteredItems.isEmpty
+                        ? const Center(child: Text('Aucun élément trouvé.'))
+                        : ListView.separated(
+                            itemCount: filteredItems.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (_, int index) {
+                              final ReferentielEntry item = filteredItems[index];
+                              return ListTile(
+                                dense: true,
+                                title: Text(item.displayLabel),
+                                subtitle:
+                                    item.code.isEmpty ? null : Text(item.code),
+                                trailing: Icon(
+                                  selectedItems.contains(item.displayValue)
+                                      ? Icons.check_circle
+                                      : Icons.add_circle_outline,
+                                  color: Colors.teal,
+                                ),
+                                onTap: () {
+                                  setState(() {
+                                    if (!selectedItems
+                                        .contains(item.displayValue)) {
+                                      selectedItems.add(item.displayValue);
+                                    }
+                                  });
+                                  Navigator.pop(dialogContext);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Annuler'),
+              ),
+            ],
+          );
+        },
+      ),
+    ).whenComplete(searchCtrl.dispose);
   }
 
   Widget _buildSectionHeader(String title) {

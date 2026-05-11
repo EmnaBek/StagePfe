@@ -9,6 +9,7 @@ class LaboratoirePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return const CardReadingPage(
       title: 'Laboratoire',
+      referentielCategory: 'LABO',
       description:
           'La page Laboratoire est floutée pour ressembler à une carte. Appuyez sur le bouton ci-dessous pour lire la carte.',
     );
