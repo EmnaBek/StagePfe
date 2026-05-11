@@ -16,6 +16,7 @@ class QrTokenValidationPage extends StatefulWidget {
 
 class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
   final TextEditingController _endpointController = TextEditingController();
+  late final MobileScannerController _scannerController;
 
   bool _scanLocked = false;
   bool _isLoading = false;
@@ -27,13 +28,20 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
   Map<String, dynamic>? _decodedTokenClaims;
 
   @override
+  void initState() {
+    super.initState();
+    _scannerController = MobileScannerController();
+  }
+
+  @override
   void dispose() {
+    _scannerController.dispose();
     _endpointController.dispose();
     super.dispose();
   }
 
   Future<void> _handleDetection(BarcodeCapture capture) async {
-    if (_scanLocked || _isLoading) return;
+    if (_scanLocked || _isLoading || !mounted) return;
 
     final String? rawValue =
         capture.barcodes.isNotEmpty ? capture.barcodes.first.rawValue : null;
@@ -50,6 +58,9 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
 
     final Map<String, dynamic>? decodedClaims =
         _tryDecodeJwtPayload(extractedToken);
+
+    await _scannerController.stop();
+    if (!mounted) return;
 
     setState(() {
       _scanLocked = true;
@@ -272,6 +283,8 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
       );
 
       final String prettyBody = _formatBody(response.body);
+      if (!mounted) return;
+
       setState(() {
         _serverResponse =
             'HTTP ${response.statusCode}\n\nHeaders: ${response.headers}\n\n$prettyBody';
@@ -281,18 +294,25 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         await Future.delayed(const Duration(seconds: 1));
         if (mounted) {
-          Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            AppRoutes.dashboard,
+            (Route<dynamic> route) => false,
+          );
         }
       }
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _error = 'Erreur réseau: $e';
         _serverResponse = null;
       });
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -305,7 +325,10 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
     return body;
   }
 
-  void _resetScan() {
+  Future<void> _resetScan() async {
+    await _scannerController.start();
+    if (!mounted) return;
+
     setState(() {
       _scanLocked = false;
       _isLoading = false;
@@ -393,7 +416,10 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
               child: SizedBox(
                 height: 240,
                 width: double.infinity,
-                child: MobileScanner(onDetect: _handleDetection),
+                child: MobileScanner(
+                  controller: _scannerController,
+                  onDetect: _handleDetection,
+                ),
               ),
             ),
             const SizedBox(height: 12),
