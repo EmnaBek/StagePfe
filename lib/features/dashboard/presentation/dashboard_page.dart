@@ -4,27 +4,8 @@ import '../../../core/widgets/connection_banner.dart';
 import '../../../app/routes.dart';
 import '../../../core/session/user_session.dart';
 
-class DashboardPage extends StatefulWidget {
+class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
-
-  @override
-  State<DashboardPage> createState() => _DashboardPageState();
-}
-
-class _DashboardPageState extends State<DashboardPage> {
-  bool _hasAutoOpenedScanner = false;
-
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_hasAutoOpenedScanner) return;
-    _hasAutoOpenedScanner = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      Navigator.pushNamed(context, AppRoutes.qrTokenValidation);
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +16,6 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              
               /// LOGOS
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -51,7 +31,8 @@ class _DashboardPageState extends State<DashboardPage> {
               ValueListenableBuilder<String?>(
                 valueListenable: UserSession.displayName,
                 builder: (BuildContext context, String? displayName, Widget? _) {
-                  final String title = (displayName != null && displayName.trim().isNotEmpty)
+                  final String title =
+                      (displayName != null && displayName.trim().isNotEmpty)
                       ? displayName.trim()
                       : 'CS Ahomey Lokpo';
                   return Text(
@@ -64,7 +45,6 @@ class _DashboardPageState extends State<DashboardPage> {
                   );
                 },
               ),
-
 
               const SizedBox(height: 16),
 
@@ -80,54 +60,53 @@ class _DashboardPageState extends State<DashboardPage> {
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
                   children: [
-
                     DashboardTile(
                       icon: Icons.receipt_long,
                       title: "Caisse",
                       onTap: () =>
                           Navigator.pushNamed(context, AppRoutes.caisse),
                     ),
-
                     DashboardTile(
                       icon: Icons.local_hospital,
                       title: "Hospitalisation",
                       onTap: () => Navigator.pushNamed(
-                          context, AppRoutes.hospitalisation),
+                        context,
+                        AppRoutes.hospitalisation,
+                      ),
                     ),
-
                     DashboardTile(
                       icon: Icons.assignment,
                       title: "Prestations enregistrées",
-                      onTap: () =>
-                          Navigator.pushNamed(context, AppRoutes.prestations),
+                      onTap: () => Navigator.pushNamed(
+                        context,
+                        AppRoutes.prestations,
+                      ),
                     ),
-
                     DashboardTile(
                       icon: Icons.check_circle,
                       title: "Validation",
                       onTap: () =>
                           Navigator.pushNamed(context, AppRoutes.validation),
                     ),
-
                     DashboardTile(
                       icon: Icons.menu_book,
                       title: "Référentiel",
                       onTap: () =>
                           Navigator.pushNamed(context, AppRoutes.referentiel),
                     ),
-
                     DashboardTile(
                       icon: Icons.warning,
                       title: "Réclamation",
                       onTap: () =>
                           Navigator.pushNamed(context, AppRoutes.reclamation),
                     ),
-
                     DashboardTile(
                       icon: Icons.qr_code_scanner,
                       title: "Scan QR Token",
                       onTap: () => Navigator.pushNamed(
-                          context, AppRoutes.qrTokenValidation),
+                        context,
+                        AppRoutes.qrTokenValidation,
+                      ),
                     ),
                   ],
                 ),

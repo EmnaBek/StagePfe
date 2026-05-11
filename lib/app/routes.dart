@@ -16,7 +16,7 @@ class AppRoutes {
   static const validation = '/validation';
   static const referentiel = '/referentiel';
   static const reclamation = '/reclamation';
-  static const qrTokenValidation = '/qr-token-validation';
+  static const qrTokenValidation = 'qr-token-validation';
 
   static Map<String, WidgetBuilder> routes = {
     dashboard: (_) => const DashboardPage(),
