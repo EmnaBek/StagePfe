@@ -59,7 +59,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
     final Map<String, dynamic>? decodedClaims =
         _tryDecodeJwtPayload(extractedToken);
 
-    _scanLocked = true;
+
     await _scannerController.stop();
     if (!mounted) return;
 
@@ -301,7 +301,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
 
       // Si réponse réussie (2xx), naviguer vers le dashboard.
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        await _openDashboard();
+
       }
     } catch (e) {
       if (!mounted) return;
