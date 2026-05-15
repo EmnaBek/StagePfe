@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import '../../app/routes.dart';
-import '../../core/session/user_session.dart';
+import 'package:interface_stage/app/routes.dart';
+import 'package:interface_stage/core/session/user_session.dart';
 
 class QrTokenValidationPage extends StatefulWidget {
   const QrTokenValidationPage({super.key});

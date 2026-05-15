@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/routes.dart';
-import '../../../core/session/user_session.dart';
-import '../../../core/widgets/connection_banner.dart';
-import '../../../core/widgets/dashboard_tile.dart';
+import 'package:interface_stage/app/routes.dart';
+import 'package:interface_stage/core/session/user_session.dart';
+import 'package:interface_stage/core/widgets/connection_banner.dart';
+import 'package:interface_stage/core/widgets/dashboard_tile.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
