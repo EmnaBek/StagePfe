@@ -1,11 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import '../../app/routes.dart';
-import '../../core/session/user_session.dart';
+import 'package:interface_stage/core/session/user_session.dart';
+import 'package:interface_stage/features/dashboard/presentation/pages/dashboard_page.dart';
 
 class QrTokenValidationPage extends StatefulWidget {
   const QrTokenValidationPage({super.key});
@@ -20,6 +21,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
 
   bool _scanLocked = false;
   bool _isLoading = false;
+  bool _hasNavigatedToDashboard = false;
   String? _rawQrValue;
   String? _token;
   String? _serverResponse;
@@ -59,10 +61,6 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
     final Map<String, dynamic>? decodedClaims =
         _tryDecodeJwtPayload(extractedToken);
 
-
-    await _scannerController.stop();
-    if (!mounted) return;
-
     setState(() {
       _scanLocked = true;
       _rawQrValue = rawValue;
@@ -86,14 +84,27 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
       structure: _extractStructureType(decodedClaims),
     );
 
-    await _callProtectedApi(extractedToken);
+    final bool shouldCallProtectedApi =
+        _endpointController.text.trim().isNotEmpty;
+    if (shouldCallProtectedApi) {
+      unawaited(_callProtectedApi(extractedToken));
+    }
+
+    await _openDashboard();
   }
 
   Future<void> _openDashboard() async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    if (_hasNavigatedToDashboard) return;
+    _hasNavigatedToDashboard = true;
+
+    await Future<void>.delayed(Duration.zero);
     if (!mounted) return;
 
-
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => const DashboardPage(),
+      ),
+    );
   }
 
   String _extractToken(String value) {
@@ -298,7 +309,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
 
       // Si réponse réussie (2xx), naviguer vers le dashboard.
       if (response.statusCode >= 200 && response.statusCode < 300) {
-
+        await _openDashboard();
       }
     } catch (e) {
       if (!mounted) return;
@@ -332,6 +343,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
     setState(() {
       _scanLocked = false;
       _isLoading = false;
+      _hasNavigatedToDashboard = false;
       _rawQrValue = null;
       _token = null;
       _decodedTokenClaims = null;

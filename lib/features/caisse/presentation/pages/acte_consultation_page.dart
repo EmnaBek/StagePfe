@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../../core/services/referentiel_service.dart';
-import '../../core/services/taka_usb_service.dart';
+import 'package:interface_stage/app/injection.dart';
+import 'package:interface_stage/features/referentiel/domain/entities/referentiel_entry.dart';
 
 class ActeConsultationPage extends StatefulWidget {
   const ActeConsultationPage({super.key});
@@ -14,7 +14,6 @@ class ActeConsultationPage extends StatefulWidget {
 }
 
 class _ActeConsultationPageState extends State<ActeConsultationPage> {
-  final takaUsb = TakaUsbService();
   String status = "Press READ";
   bool isLoading = false;
   bool _isReferentielLoading = true;
@@ -38,9 +37,9 @@ class _ActeConsultationPageState extends State<ActeConsultationPage> {
     });
 
     try {
-      final List<ReferentielEntry> cim10 = await ReferentielService.fetchCim10();
+      final List<ReferentielEntry> cim10 = await AppInjection.fetchCim10Referentiel();
       final List<ReferentielEntry> actes =
-          await ReferentielService.fetchProductsByCategory('ACTE');
+          await AppInjection.fetchProductsByCategory('ACTE');
       if (!mounted) return;
       setState(() {
         _cim10Referentiel = cim10;
@@ -682,7 +681,7 @@ class _ActeConsultationPageState extends State<ActeConsultationPage> {
       cardData = null;
     });
 
-    bool connected = await takaUsb.connect();
+    bool connected = await AppInjection.connectCardReader();
     if (!connected) {
       setState(() {
         status = "USB NOT FOUND";
@@ -697,7 +696,7 @@ class _ActeConsultationPageState extends State<ActeConsultationPage> {
     int retries = 10;
     while (retries-- > 0 && response == "NO PERMISSION") {
       await Future.delayed(const Duration(seconds: 1));
-      response = await takaUsb.readCard();
+      response = await AppInjection.readCard();
     }
 
     try {
@@ -904,7 +903,7 @@ class _ActeConsultationPageState extends State<ActeConsultationPage> {
   }
 
   Future<void> _disconnect() async {
-    await takaUsb.disconnect();
+    await AppInjection.disconnectCardReader();
     setState(() => status = "DISCONNECTED");
   }
 }
