@@ -4,8 +4,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-import '../../core/services/referentiel_service.dart';
-import '../../core/services/taka_usb_service.dart';
+import 'package:interface_stage/app/injection.dart';
+import 'package:interface_stage/features/referentiel/domain/entities/referentiel_entry.dart';
 
 class CardReadingPage extends StatefulWidget {
   const CardReadingPage({
@@ -28,7 +28,6 @@ class CardReadingPage extends StatefulWidget {
 }
 
 class _CardReadingPageState extends State<CardReadingPage> {
-  final TakaUsbService _takaUsb = TakaUsbService();
   String _cardStatus = 'Appuyez sur READ CARD pour lire la carte';
   bool _isCardLoading = false;
   bool _isReferentielLoading = false;
@@ -54,7 +53,7 @@ class _CardReadingPageState extends State<CardReadingPage> {
 
     try {
       final List<ReferentielEntry> items =
-          await ReferentielService.fetchProductsByCategory(category);
+          await AppInjection.fetchProductsByCategory(category);
       if (!mounted) return;
       setState(() {
         _referentielItems = items;
@@ -76,7 +75,7 @@ class _CardReadingPageState extends State<CardReadingPage> {
       _cardData = null;
     });
 
-    bool connected = await _takaUsb.connect();
+    bool connected = await AppInjection.connectCardReader();
     if (!connected) {
       setState(() {
         _cardStatus = 'USB NON TROUVÉ';
@@ -91,7 +90,7 @@ class _CardReadingPageState extends State<CardReadingPage> {
     int retries = 10;
     while (retries-- > 0 && response == 'AUCUNE PERMISSION') {
       await Future.delayed(const Duration(seconds: 1));
-      response = await _takaUsb.readCard();
+      response = await AppInjection.readCard();
     }
 
     try {
@@ -110,7 +109,7 @@ class _CardReadingPageState extends State<CardReadingPage> {
   }
 
   Future<void> _disconnectCard() async {
-    await _takaUsb.disconnect();
+    await AppInjection.disconnectCardReader();
     setState(() {
       _cardStatus = 'DÉCONNECTÉ';
       _isCardLoading = false;

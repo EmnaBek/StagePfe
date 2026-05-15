@@ -1,10 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-
-import '../../core/session/user_session.dart';
-import '../../core/services/taka_usb_service.dart';
+import 'package:interface_stage/app/injection.dart';
+import 'package:interface_stage/core/session/user_session.dart';
+import 'package:interface_stage/features/referentiel/domain/entities/referentiel_entry.dart';
 
 class ReferentielPage extends StatefulWidget {
   const ReferentielPage({super.key});
@@ -14,9 +11,6 @@ class ReferentielPage extends StatefulWidget {
 }
 
 class _ReferentielPageState extends State<ReferentielPage> {
-  static final Uri _syncUri =
-      Uri.parse('https://archtpa.bridges-corp.cloud/api/sync-mobile');
-
   static const List<String> _tabs = <String>[
     'Tout',
     'CIM 10',
@@ -36,7 +30,6 @@ class _ReferentielPageState extends State<ReferentielPage> {
   List<ReferentielItem> _cim10Items = <ReferentielItem>[];
 
   // Card reading functionality
-  final TakaUsbService _takaUsb = TakaUsbService();
   String _cardStatus = 'Appuyez sur READ CARD pour lire la carte';
   bool _isCardLoading = false;
   Map<String, dynamic>? _cardData;
@@ -53,38 +46,13 @@ class _ReferentielPageState extends State<ReferentielPage> {
     super.dispose();
   }
 
-  Future<List<ReferentielItem>> _fetchReferentielItems(
-    String token,
-    String model,
-  ) async {
-    final http.Response response = await http.post(
-      _syncUri,
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: jsonEncode(<String, dynamic>{
-        'token': token,
-        'model': model,
-        'lastSync': '1970-01-01 00:00:00',
-        'serial': '999',
-      }),
+  Future<List<ReferentielItem>> _fetchReferentielItems(String model) async {
+    final List<ReferentielEntry> entries = await AppInjection.fetchReferentielItems(
+      model,
+      filterByStructure: false,
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}');
-    }
-
-    final dynamic decoded = jsonDecode(response.body);
-    final List<dynamic> rawResults = decoded is Map<String, dynamic>
-        ? (decoded['results'] as List<dynamic>? ?? <dynamic>[])
-        : <dynamic>[];
-
-    return rawResults
-        .whereType<Map<String, dynamic>>()
-        .map(ReferentielItem.fromJson)
-        .where((ReferentielItem item) => item.isActive)
-        .toList()
+    return entries.map(ReferentielItem.fromEntry).toList()
       ..sort((ReferentielItem a, ReferentielItem b) {
         final int categoryCompare = a.category.compareTo(b.category);
         if (categoryCompare != 0) {
@@ -116,12 +84,10 @@ class _ReferentielPageState extends State<ReferentielPage> {
 
     try {
       final List<ReferentielItem> loadedItems = await _fetchReferentielItems(
-        token,
         'Product',
       );
       final List<ReferentielItem> loadedCim10Items =
           await _fetchReferentielItems(
-        token,
         'Cim_10',
       );
 
@@ -191,7 +157,7 @@ class _ReferentielPageState extends State<ReferentielPage> {
       _cardData = null;
     });
 
-    bool connected = await _takaUsb.connect();
+    bool connected = await AppInjection.connectCardReader();
     if (!connected) {
       setState(() {
         _cardStatus = "USB NON TROUVÉ";
@@ -206,7 +172,7 @@ class _ReferentielPageState extends State<ReferentielPage> {
     int retries = 10;
     while (retries-- > 0 && response == "AUCUNE PERMISSION") {
       await Future.delayed(const Duration(seconds: 1));
-      response = await _takaUsb.readCard();
+      response = await AppInjection.readCard();
     }
 
     try {
@@ -225,7 +191,7 @@ class _ReferentielPageState extends State<ReferentielPage> {
   }
 
   Future<void> _disconnectCard() async {
-    await _takaUsb.disconnect();
+    await AppInjection.disconnectCardReader();
     setState(() => _cardStatus = "DÉCONNECTÉ");
   }
 
@@ -871,6 +837,21 @@ class ReferentielItem {
       isHz: _asBool(json['is_hz']),
       isChd: _asBool(json['is_chd']),
       isChud: _asBool(json['is_chud']),
+    );
+  }
+
+
+  factory ReferentielItem.fromEntry(ReferentielEntry entry) {
+    return ReferentielItem(
+      id: entry.id,
+      code: entry.code,
+      label: entry.label,
+      category: entry.category,
+      isActive: entry.isActive,
+      isCs: entry.isCs,
+      isHz: entry.isHz,
+      isChd: entry.isChd,
+      isChud: entry.isChud,
     );
   }
 

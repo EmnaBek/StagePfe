@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../features/dashboard/presentation/dashboard_page.dart';
-import '../features/caisse/caisse_page.dart';
-import '../features/hospitalisation/hospitalisation_page.dart';
-import '../features/prestations/prestations_page.dart';
-import '../features/validation/validation_page.dart';
-import '../features/referentiel/referentiel_page.dart';
-import '../features/reclamation/reclamation_page.dart';
-import '../features/validation/qr_token_validation_page.dart';
+import 'package:interface_stage/features/dashboard/presentation/pages/dashboard_page.dart';
+import 'package:interface_stage/features/caisse/presentation/pages/caisse_page.dart';
+import 'package:interface_stage/features/hospitalisation/presentation/pages/hospitalisation_page.dart';
+import 'package:interface_stage/features/prestations/presentation/pages/prestations_page.dart';
+import 'package:interface_stage/features/validation/presentation/pages/validation_page.dart';
+import 'package:interface_stage/features/referentiel/presentation/pages/referentiel_page.dart';
+import 'package:interface_stage/features/reclamation/presentation/pages/reclamation_page.dart';
+import 'package:interface_stage/features/validation/presentation/pages/qr_token_validation_page.dart';
 
 class AppRoutes {
   static const dashboard = '/';
