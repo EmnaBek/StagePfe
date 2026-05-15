@@ -20,6 +20,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
 
   bool _scanLocked = false;
   bool _isLoading = false;
+
   String? _rawQrValue;
   String? _token;
   String? _serverResponse;
@@ -60,9 +61,6 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
         _tryDecodeJwtPayload(extractedToken);
 
 
-    await _scannerController.stop();
-    if (!mounted) return;
-
     setState(() {
       _scanLocked = true;
       _rawQrValue = rawValue;
@@ -74,6 +72,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
       _error = null;
       _serverResponse = null;
     });
+
 
     final String? displayName = _extractDisplayName(decodedClaims);
     if (displayName != null && displayName.isNotEmpty) {
@@ -90,9 +89,6 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
   }
 
   Future<void> _openDashboard() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-
 
   }
 
@@ -332,6 +328,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
     setState(() {
       _scanLocked = false;
       _isLoading = false;
+
       _rawQrValue = null;
       _token = null;
       _decodedTokenClaims = null;
