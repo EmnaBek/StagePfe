@@ -2,10 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-
-import '../../core/services/taka_usb_service.dart';
-import '../../core/session/user_session.dart';
+import 'package:interface_stage/app/injection.dart';
+import 'package:interface_stage/core/session/user_session.dart';
+import 'package:interface_stage/features/referentiel/domain/entities/referentiel_entry.dart';
 
 // ─── Couleurs principales ────────────────────────────────────────────────────
 const kGreen = Color(0xFF4CAF8C);
@@ -22,7 +21,6 @@ class HospitalisationPage extends StatefulWidget {
 
 class _HospitalisationPageState extends State<HospitalisationPage> {
   // ── Taka USB ──────────────────────────────────────────────────────────────
-  final takaUsb = TakaUsbService();
   String status = "Press READ";
   bool isLoading = false;
   Map<String, dynamic>? cardData;
@@ -41,8 +39,6 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
   List<String> imageries = [];
   List<String> affections = [];
 
-  static final Uri _syncUri =
-      Uri.parse('https://archtpa.bridges-corp.cloud/api/sync-mobile');
   bool _isReferentielLoading = true;
   String? _referentielError;
   List<_HospitalisationReferentielItem> _productsReferentiel =
@@ -69,37 +65,14 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
   }
 
   Future<List<_HospitalisationReferentielItem>> _fetchReferentielItems(
-    String token,
     String model,
   ) async {
-    final http.Response response = await http.post(
-      _syncUri,
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: jsonEncode(<String, dynamic>{
-        'token': token,
-        'model': model,
-        'lastSync': '1970-01-01 00:00:00',
-        'serial': '999',
-      }),
+    final List<ReferentielEntry> entries = await AppInjection.fetchReferentielItems(
+      model,
+      filterByStructure: false,
     );
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}');
-    }
-
-    final dynamic decoded = jsonDecode(response.body);
-    final List<dynamic> rawResults = decoded is Map<String, dynamic>
-        ? (decoded['results'] as List<dynamic>? ?? <dynamic>[])
-        : <dynamic>[];
-
-    return rawResults
-        .whereType<Map<String, dynamic>>()
-        .map(_HospitalisationReferentielItem.fromJson)
-        .where((_HospitalisationReferentielItem item) => item.isActive)
-        .toList()
+    return entries.map(_HospitalisationReferentielItem.fromEntry).toList()
       ..sort(
         (_HospitalisationReferentielItem a,
                 _HospitalisationReferentielItem b) =>
@@ -129,9 +102,9 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
 
     try {
       final List<_HospitalisationReferentielItem> products =
-          await _fetchReferentielItems(token, 'Product');
+          await _fetchReferentielItems('Product');
       final List<_HospitalisationReferentielItem> cim10 =
-          await _fetchReferentielItems(token, 'Cim_10');
+          await _fetchReferentielItems('Cim_10');
 
       if (!mounted) return;
       setState(() {
@@ -186,7 +159,7 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
       cardData = null;
     });
 
-    bool connected = await takaUsb.connect();
+    bool connected = await AppInjection.connectCardReader();
     if (!connected) {
       setState(() {
         status = "USB NOT FOUND";
@@ -201,7 +174,7 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
     int retries = 10;
     while (retries-- > 0 && response == "NO PERMISSION") {
       await Future.delayed(const Duration(seconds: 1));
-      response = await takaUsb.readCard();
+      response = await AppInjection.readCard();
     }
 
     try {
@@ -232,7 +205,7 @@ class _HospitalisationPageState extends State<HospitalisationPage> {
   }
 
   Future<void> _disconnect() async {
-    await takaUsb.disconnect();
+    await AppInjection.disconnectCardReader();
     setState(() => status = "DISCONNECTED");
   }
 
@@ -1548,17 +1521,16 @@ class _HospitalisationReferentielItem {
     required this.isChud,
   });
 
-  factory _HospitalisationReferentielItem.fromJson(Map<String, dynamic> json) {
-    final String discipline = _extractDiscipline(json);
+  factory _HospitalisationReferentielItem.fromEntry(ReferentielEntry entry) {
     return _HospitalisationReferentielItem(
-      code: (json['code'] ?? '').toString().trim(),
-      label: (json['name'] ?? json['nom_affiche'] ?? '').toString().trim(),
-      category: _mapCategory(discipline),
-      isActive: _asBool(json['is_active']),
-      isCs: _asBool(json['is_cs']),
-      isHz: _asBool(json['is_hz']),
-      isChd: _asBool(json['is_chd']),
-      isChud: _asBool(json['is_chud']),
+      code: entry.code,
+      label: entry.label,
+      category: entry.category,
+      isActive: entry.isActive,
+      isCs: entry.isCs,
+      isHz: entry.isHz,
+      isChd: entry.isChd,
+      isChud: entry.isChud,
     );
   }
 
@@ -1592,55 +1564,4 @@ class _HospitalisationReferentielItem {
     }
   }
 
-  static String _extractDiscipline(Map<String, dynamic> json) {
-    const List<String> keys = <String>[
-      'discipline',
-      'category',
-      'categorie',
-      'type',
-      'discipline_name',
-      'disciplineLabel',
-    ];
-
-    for (final String key in keys) {
-      final dynamic value = json[key];
-      if (value is String && value.trim().isNotEmpty) {
-        return value.trim();
-      }
-    }
-
-    return '';
-  }
-
-  static String _mapCategory(String discipline) {
-    final String normalized = discipline.trim().toUpperCase();
-    if (normalized.contains('ACTE')) {
-      return 'ACTE';
-    }
-    if (normalized.contains('RADIO')) {
-      return 'RADIO';
-    }
-    if (normalized.contains('CIM')) {
-      return 'CIM 10';
-    }
-    if (normalized.contains('PHARMACIE') || normalized.contains('PHARMACY')) {
-      return 'PHARMACIE';
-    }
-    if (normalized.contains('LABO') ||
-        normalized.contains('LABORATOIRE') ||
-        normalized.contains('LABORATORY')) {
-      return 'LABO';
-    }
-    return 'Tout';
-  }
-
-  static bool _asBool(dynamic value) {
-    if (value is bool) return value;
-    if (value is num) return value != 0;
-    if (value is String) {
-      final String normalized = value.trim().toLowerCase();
-      return normalized == 'true' || normalized == '1' || normalized == 'yes';
-    }
-    return false;
-  }
 }

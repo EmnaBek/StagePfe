@@ -1,29 +1,10 @@
-import 'package:flutter/services.dart';
+import 'package:interface_stage/app/injection.dart';
 
+@Deprecated('Use card_reader domain use cases from AppInjection instead.')
 class TakaUsbService {
-  static const MethodChannel _channel = MethodChannel('taka_usb');
+  Future<bool> connect() => AppInjection.connectCardReader();
 
-  Future<bool> connect() async {
-    try {
-      final bool result = await _channel.invokeMethod('connect');
-      return result;
-    } catch (e) {
-      return false;
-    }
-  }
+  Future<String> readCard() => AppInjection.readCard();
 
-  Future<String> readCard() async {
-    try {
-      final String result = await _channel.invokeMethod('readCard');
-      return result;
-    } catch (e) {
-      return "READ ERROR";
-    }
-  }
-
-  Future<void> disconnect() async {
-    try {
-      await _channel.invokeMethod('disconnect');
-    } catch (_) {}
-  }
+  Future<void> disconnect() => AppInjection.disconnectCardReader();
 }
