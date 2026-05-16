@@ -57,14 +57,6 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
       _jwtDecodeNote = null;
       _serverResponse = null;
 
-      _error = null;
-    });
-
-    try {
-      final QrTokenValidationResult result = await AppInjection.validateQrToken(
-        rawQrValue: rawValue,
-        protectedApiEndpoint: _endpointController.text,
-      );
       if (!mounted) return;
 
       setState(() {
@@ -79,9 +71,6 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
       });
 
 
-        await _openDashboard();
-      }
-    } catch (error) {
       if (!mounted) return;
 
       setState(() {
@@ -90,7 +79,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
         _error = 'Erreur réseau: $error';
         _serverResponse = null;
       });
-    }
+
   }
 
   Future<void> _openDashboard() async {
