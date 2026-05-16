@@ -1,11 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import 'package:interface_stage/app/injection.dart';
 import 'package:interface_stage/app/routes.dart';
-import 'package:interface_stage/core/session/user_session.dart';
+import 'package:interface_stage/features/validation/domain/entities/qr_token_validation_result.dart';
 
 class QrTokenValidationPage extends StatefulWidget {
   const QrTokenValidationPage({super.key});
@@ -48,277 +48,57 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
         capture.barcodes.isNotEmpty ? capture.barcodes.first.rawValue : null;
     if (rawValue == null || rawValue.trim().isEmpty) return;
 
-    final String extractedToken = _extractToken(rawValue.trim());
-    if (extractedToken.isEmpty) {
-      setState(() {
-        _rawQrValue = rawValue;
-        _error = 'Aucun token exploitable trouvé dans le QR.';
-      });
-      return;
-    }
-
-    final Map<String, dynamic>? decodedClaims =
-        _tryDecodeJwtPayload(extractedToken);
-
-
     setState(() {
       _scanLocked = true;
+      _isLoading = _endpointController.text.trim().isNotEmpty;
       _rawQrValue = rawValue;
-      _token = extractedToken;
-      _decodedTokenClaims = decodedClaims;
-      _jwtDecodeNote = decodedClaims == null
-          ? 'Token détecté, mais payload JWT illisible (ou token non-JWT).'
-          : null;
-      _error = null;
+      _token = null;
+      _decodedTokenClaims = null;
+      _jwtDecodeNote = null;
       _serverResponse = null;
+      _error = null;
     });
 
+    await AppInjection.validateQrToken(
+      rawQrValue: rawValue,
+      protectedApiEndpoint: _endpointController.text,
+    ).then((QrTokenValidationResult result) async {
+      if (!mounted) return;
 
-    final String? displayName = _extractDisplayName(decodedClaims);
-    if (displayName != null && displayName.isNotEmpty) {
-      UserSession.displayName.value = displayName;
-    }
+      setState(() {
+        _isLoading = false;
+        _scanLocked = result.token != null;
+        _rawQrValue = result.rawQrValue;
+        _token = result.token;
+        _decodedTokenClaims = result.decodedClaims;
+        _jwtDecodeNote = result.jwtDecodeNote;
+        _serverResponse = result.serverResponse;
+        _error = result.error;
+      });
 
-    UserSession.updateAuthSession(
-      token: extractedToken,
-      claims: decodedClaims,
-      structure: _extractStructureType(decodedClaims),
-    );
+      if (result.shouldOpenDashboard) {
+        await _openDashboard();
+      }
+    }).catchError((Object error) {
+      if (!mounted) return;
 
-    await _callProtectedApi(extractedToken);
+      setState(() {
+        _isLoading = false;
+        _scanLocked = false;
+        _error = 'Erreur réseau: $error';
+        _serverResponse = null;
+      });
+    });
   }
 
   Future<void> _openDashboard() async {
+    await _scannerController.stop();
+    if (!mounted) return;
 
-  }
-
-  String _extractToken(String value) {
-    final Uri? uri = Uri.tryParse(value);
-    final String? tokenFromQuery = uri?.queryParameters['token'];
-    if (tokenFromQuery != null && tokenFromQuery.isNotEmpty) {
-      return _normalizeTokenCandidate(tokenFromQuery);
-    }
-
-    final dynamic decoded = _tryDecodeJson(value);
-    if (decoded is Map<String, dynamic>) {
-      final dynamic tokenField = decoded['token'];
-      if (tokenField is String && tokenField.isNotEmpty) {
-        return _normalizeTokenCandidate(tokenField);
-      }
-    }
-
-    return _normalizeTokenCandidate(value);
-  }
-
-  String _normalizeTokenCandidate(String value) {
-    final String compact = value
-        .trim()
-        .replaceAll('\n', '')
-        .replaceAll('\r', '')
-        .replaceAll(' ', '');
-
-    final RegExp jwtPattern =
-        RegExp(r'([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)');
-    final RegExpMatch? match = jwtPattern.firstMatch(compact);
-    if (match != null) {
-      return match.group(1) ?? compact;
-    }
-
-    return compact;
-  }
-
-  dynamic _tryDecodeJson(String value) {
-    try {
-      return jsonDecode(value);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Map<String, dynamic>? _tryDecodeJwtPayload(String token) {
-    final List<String> parts = token.split('.');
-    if (parts.length != 3) {
-      return null;
-    }
-
-    try {
-      final String normalizedPayload = base64Url.normalize(parts[1]);
-      final String payloadJson =
-          utf8.decode(base64Url.decode(normalizedPayload));
-      final dynamic decoded = jsonDecode(payloadJson);
-
-      if (decoded is Map<String, dynamic>) {
-        final dynamic exp = decoded['exp'];
-        if (exp is int) {
-          decoded['exp_readable_utc'] =
-              DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true)
-                  .toIso8601String();
-        }
-        return decoded;
-      }
-    } catch (_) {
-      return null;
-    }
-
-    return null;
-  }
-
-  String? _extractDisplayName(Map<String, dynamic>? claims) {
-    if (claims == null) return null;
-
-    const List<String> preferredKeys = <String>[
-      'displayName',
-      'display_name',
-      'displayname',
-      'name',
-      'fullName',
-      'full_name',
-      'username',
-      'preferred_username',
-      'given_name',
-    ];
-
-    String? searchIn(dynamic node) {
-      if (node is Map<String, dynamic>) {
-        for (final String key in preferredKeys) {
-          final dynamic value = node[key];
-          if (value is String && value.trim().isNotEmpty) {
-            return value.trim();
-          }
-        }
-
-        for (final dynamic child in node.values) {
-          final String? nested = searchIn(child);
-          if (nested != null) return nested;
-        }
-      } else if (node is List<dynamic>) {
-        for (final dynamic child in node) {
-          final String? nested = searchIn(child);
-          if (nested != null) return nested;
-        }
-      }
-      return null;
-    }
-
-    return searchIn(claims);
-  }
-
-  String? _extractStructureType(Map<String, dynamic>? claims) {
-    if (claims == null) return null;
-
-    const List<String> preferredKeys = <String>[
-      'structure_type',
-      'structureType',
-      'type_structure',
-      'typeStructure',
-      'structure',
-      'structureCode',
-      'structure_code',
-      'facility_type',
-      'facilityType',
-      'user_structure_type',
-    ];
-
-    String? normalize(dynamic value) {
-      if (value is! String) return null;
-      final String normalized = value.trim().toLowerCase();
-      const Set<String> allowed = <String>{'cs', 'hz', 'chd', 'chud'};
-      return allowed.contains(normalized) ? normalized : null;
-    }
-
-    String? searchIn(dynamic node) {
-      if (node is Map<String, dynamic>) {
-        for (final String key in preferredKeys) {
-          final String? candidate = normalize(node[key]);
-          if (candidate != null) {
-            return candidate;
-          }
-        }
-
-        for (final dynamic child in node.values) {
-          final String? nested = searchIn(child);
-          if (nested != null) return nested;
-        }
-      } else if (node is List<dynamic>) {
-        for (final dynamic child in node) {
-          final String? nested = searchIn(child);
-          if (nested != null) return nested;
-        }
-      } else {
-        return normalize(node);
-      }
-
-      return null;
-    }
-
-    return searchIn(claims);
-  }
-
-  Future<void> _callProtectedApi(String token) async {
-    final String endpoint = _endpointController.text.trim();
-    if (endpoint.isEmpty) {
-      await _openDashboard();
-      return;
-    }
-
-    final Uri? uri = Uri.tryParse(endpoint);
-    if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
-      setState(() {
-        _isLoading = false;
-        _error = 'URL invalide. Exemple: https://api.exemple.com/path';
-      });
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final http.Response response = await http.get(
-        uri,
-        headers: <String, String>{
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
-
-      final String prettyBody = _formatBody(response.body);
-      if (!mounted) return;
-
-      setState(() {
-        _serverResponse =
-            'HTTP ${response.statusCode}\n\nHeaders: ${response.headers}\n\n$prettyBody';
-      });
-
-      // Si réponse réussie (2xx), naviguer vers le dashboard.
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-
-      }
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _error = 'Erreur réseau: $e';
-        _serverResponse = null;
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  String _formatBody(String body) {
-    final dynamic decoded = _tryDecodeJson(body);
-    if (decoded != null) {
-      const JsonEncoder encoder = JsonEncoder.withIndent('  ');
-      return encoder.convert(decoded);
-    }
-    return body;
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.dashboard,
+      (Route<dynamic> route) => false,
+    );
   }
 
   Future<void> _resetScan() async {
