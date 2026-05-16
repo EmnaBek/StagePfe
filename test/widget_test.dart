@@ -7,4 +7,14 @@ void main() {
     expect(AppRoutes.routes.containsKey(AppRoutes.dashboard), isTrue);
     expect(AppRoutes.routes.containsKey(AppRoutes.caisse), isTrue);
   });
+
+  test('uses absolute route names for Navigator compatibility', () {
+    for (final String routeName in AppRoutes.routes.keys) {
+      expect(
+        routeName.startsWith('/'),
+        isTrue,
+        reason: '$routeName must start with /',
+      );
+    }
+  });
 }
