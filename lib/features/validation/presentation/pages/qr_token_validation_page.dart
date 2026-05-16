@@ -56,6 +56,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
       _decodedTokenClaims = null;
       _jwtDecodeNote = null;
       _serverResponse = null;
+
       _error = null;
     });
 
@@ -77,7 +78,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
         _error = result.error;
       });
 
-      if (result.shouldOpenDashboard) {
+
         await _openDashboard();
       }
     } catch (error) {
