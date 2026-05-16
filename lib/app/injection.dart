@@ -10,6 +10,12 @@ import 'package:interface_stage/features/referentiel/domain/repositories/referen
 import 'package:interface_stage/features/referentiel/domain/usecases/fetch_cim10_referentiel.dart';
 import 'package:interface_stage/features/referentiel/domain/usecases/fetch_products_by_category.dart';
 import 'package:interface_stage/features/referentiel/domain/usecases/fetch_referentiel_items.dart';
+import 'package:interface_stage/features/validation/data/datasources/protected_api_remote_data_source.dart';
+import 'package:interface_stage/features/validation/data/repositories/protected_api_validator_repository_impl.dart';
+import 'package:interface_stage/features/validation/data/repositories/user_session_auth_repository.dart';
+import 'package:interface_stage/features/validation/domain/repositories/auth_session_repository.dart';
+import 'package:interface_stage/features/validation/domain/repositories/protected_api_validator_repository.dart';
+import 'package:interface_stage/features/validation/domain/usecases/validate_qr_token.dart';
 
 class AppInjection {
   AppInjection._();
@@ -41,4 +47,18 @@ class AppInjection {
 
   static final FetchProductsByCategory fetchProductsByCategory =
       FetchProductsByCategory(_referentielRepository);
+
+  static final ProtectedApiRemoteDataSource _protectedApiRemoteDataSource =
+      ProtectedApiRemoteDataSource();
+
+  static final ProtectedApiValidatorRepository _protectedApiValidatorRepository =
+      ProtectedApiValidatorRepositoryImpl(_protectedApiRemoteDataSource);
+
+  static final AuthSessionRepository _authSessionRepository =
+      UserSessionAuthRepository();
+
+  static final ValidateQrToken validateQrToken = ValidateQrToken(
+    _authSessionRepository,
+    _protectedApiValidatorRepository,
+  );
 }

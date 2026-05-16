@@ -1,5 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:interface_stage/app/routes.dart';
+import 'package:interface_stage/features/validation/domain/services/qr_token_parser.dart';
 
 void main() {
   test('defines the application routes', () {
@@ -17,4 +21,5 @@ void main() {
       );
     }
   });
+
 }
