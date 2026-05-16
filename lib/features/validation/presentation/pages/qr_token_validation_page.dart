@@ -56,13 +56,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
       _decodedTokenClaims = null;
       _jwtDecodeNote = null;
       _serverResponse = null;
-      _error = null;
-    });
 
-    await AppInjection.validateQrToken(
-      rawQrValue: rawValue,
-      protectedApiEndpoint: _endpointController.text,
-    ).then((QrTokenValidationResult result) async {
       if (!mounted) return;
 
       setState(() {
@@ -76,10 +70,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
         _error = result.error;
       });
 
-      if (result.shouldOpenDashboard) {
-        await _openDashboard();
-      }
-    }).catchError((Object error) {
+
       if (!mounted) return;
 
       setState(() {
@@ -88,7 +79,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
         _error = 'Erreur réseau: $error';
         _serverResponse = null;
       });
-    });
+
   }
 
   Future<void> _openDashboard() async {
