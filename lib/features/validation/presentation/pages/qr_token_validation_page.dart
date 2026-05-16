@@ -48,26 +48,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
         capture.barcodes.isNotEmpty ? capture.barcodes.first.rawValue : null;
     if (rawValue == null || rawValue.trim().isEmpty) return;
 
-    _markScanStarted(rawValue);
 
-    try {
-      final QrTokenValidationResult result = await AppInjection.validateQrToken(
-        rawQrValue: rawValue,
-        protectedApiEndpoint: _endpointController.text,
-      );
-      if (!mounted) return;
-
-      _applyValidationResult(result);
-
-      if (result.shouldOpenDashboard) {
-        await _openDashboard();
-      }
-    } on Object catch (error) {
-      _applyValidationError(error);
-    }
-  }
-
-  void _markScanStarted(String rawValue) {
     setState(() {
       _scanLocked = true;
       _isLoading = _endpointController.text.trim().isNotEmpty;
@@ -76,32 +57,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
       _decodedTokenClaims = null;
       _jwtDecodeNote = null;
       _serverResponse = null;
-      _error = null;
-    });
-  }
 
-  void _applyValidationResult(QrTokenValidationResult result) {
-    setState(() {
-      _isLoading = false;
-      _scanLocked = result.token != null;
-      _rawQrValue = result.rawQrValue;
-      _token = result.token;
-      _decodedTokenClaims = result.decodedClaims;
-      _jwtDecodeNote = result.jwtDecodeNote;
-      _serverResponse = result.serverResponse;
-      _error = result.error;
-    });
-  }
-
-  void _applyValidationError(Object error) {
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-      _scanLocked = false;
-      _error = 'Erreur réseau: $error';
-      _serverResponse = null;
-    });
   }
 
   Future<void> _openDashboard() async {
