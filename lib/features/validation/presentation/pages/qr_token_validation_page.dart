@@ -48,6 +48,7 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
         capture.barcodes.isNotEmpty ? capture.barcodes.first.rawValue : null;
     if (rawValue == null || rawValue.trim().isEmpty) return;
 
+
     setState(() {
       _scanLocked = true;
       _isLoading = _endpointController.text.trim().isNotEmpty;
@@ -56,29 +57,6 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
       _decodedTokenClaims = null;
       _jwtDecodeNote = null;
       _serverResponse = null;
-
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-        _scanLocked = result.token != null;
-        _rawQrValue = result.rawQrValue;
-        _token = result.token;
-        _decodedTokenClaims = result.decodedClaims;
-        _jwtDecodeNote = result.jwtDecodeNote;
-        _serverResponse = result.serverResponse;
-        _error = result.error;
-      });
-
-
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-        _scanLocked = false;
-        _error = 'Erreur réseau: $error';
-        _serverResponse = null;
-      });
 
   }
 
