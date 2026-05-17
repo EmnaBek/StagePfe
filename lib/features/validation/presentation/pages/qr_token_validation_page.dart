@@ -48,16 +48,48 @@ class _QrTokenValidationPageState extends State<QrTokenValidationPage> {
         capture.barcodes.isNotEmpty ? capture.barcodes.first.rawValue : null;
     if (rawValue == null || rawValue.trim().isEmpty) return;
 
+    final String endpoint = _endpointController.text.trim();
 
     setState(() {
       _scanLocked = true;
-      _isLoading = _endpointController.text.trim().isNotEmpty;
+      _isLoading = endpoint.isNotEmpty;
       _rawQrValue = rawValue;
       _token = null;
       _decodedTokenClaims = null;
       _jwtDecodeNote = null;
       _serverResponse = null;
+      _error = null;
+    });
 
+    try {
+      final QrTokenValidationResult result = await AppInjection.validateQrToken(
+        rawQrValue: rawValue,
+        protectedApiEndpoint: endpoint,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _rawQrValue = result.rawQrValue;
+        _token = result.token;
+        _decodedTokenClaims = result.decodedClaims;
+        _jwtDecodeNote = result.jwtDecodeNote;
+        _serverResponse = result.serverResponse;
+        _error = result.error;
+      });
+
+      if (result.shouldOpenDashboard) {
+        await _openDashboard();
+      }
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _error = 'Erreur pendant la validation du QR: $error';
+      });
+    }
   }
 
   Future<void> _openDashboard() async {
